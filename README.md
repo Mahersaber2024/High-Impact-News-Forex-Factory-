@@ -1,10 +1,17 @@
 # ForexFactory Flask API + Telegram Bot
 
-This project provides:
+A lightweight Flask API for ForexFactory high-impact news, with optional Telegram bot support and optional domain-based HTTPS access for external clients such as MetaTrader 5.
+
+Sponsor: [@HeySoloATM](https://t.me/HeySoloATM)
+
+## Features
 
 - Flask API for ForexFactory economic calendar data
 - Optional Telegram bot
-- Optional public URL support for MetaTrader 5 or external clients
+- Public API access through server IP
+- Optional domain setup with Nginx reverse proxy
+- Optional HTTPS with Let's Encrypt and Certbot
+- Interactive installer with systemd service setup
 
 ## Files
 
@@ -21,17 +28,20 @@ This project provides:
 bash <(curl -fsSL https://raw.githubusercontent.com/Mahersaber2024/High-Impact-News-Forex-Factory-/main/install.sh)
 ```
 
-## Install Options
+## Installer Prompts
 
-The installer asks:
+The installer asks for:
 
-- Flask only
-- Flask + Telegram bot
-- Telegram bot token
+- Install mode: Flask only or Flask + Telegram Bot
 - Flask port
-- Whether a temporary public URL is needed
+- Optional domain name for HTTPS
+- SSL email address if a domain is provided
+- Telegram bot token if bot mode is selected
+- Telegram admin chat ID
 
-## Local API Endpoints
+If you press Enter on the domain question, domain setup is skipped.
+
+## API Endpoints
 
 - `/api/forex/today`
 - `/api/forex/tomorrow`
@@ -43,49 +53,114 @@ Example:
 curl http://127.0.0.1:45869/api/forex/today
 ```
 
-## MetaTrader 5
+## API Access Modes
 
-In MT5, set:
+### Local access
 
-```mql5
-input string NewsURL = "http://YOUR_SERVER_IP:45869";
+```text
+http://127.0.0.1:45869/api/forex/today
 ```
 
-If you use a domain:
+### Public access by server IP
+
+If Nginx is installed and running on port 80, the API can be accessed from outside the server using:
+
+```text
+http://YOUR_SERVER_IP/api/forex/today
+```
+
+Example:
+
+```text
+http://185.28.119.231/api/forex/today
+```
+
+### Public access by domain
+
+If you provide a domain during installation and its DNS points to your server, the installer configures Nginx and tries to obtain an SSL certificate automatically.
+
+Example:
+
+```text
+https://news.example.com/api/forex/today
+```
+
+## MetaTrader 5
+
+If you are using direct server IP access:
+
+```mql5
+input string NewsURL = "http://YOUR_SERVER_IP";
+```
+
+If you are using a domain with HTTPS:
 
 ```mql5
 input string NewsURL = "https://news.example.com";
 ```
 
-Then the expert will request:
+Then your EA can request:
 
 ```text
 /api/forex/today
 ```
 
-## Temporary Public URL
+## Services
 
-If selected during install, Cloudflare Tunnel can be used:
+The installer creates these systemd services:
+
+- `flask.service`
+- `telegram-bot.service` only if bot mode is enabled
+
+Check service status:
 
 ```bash
-cloudflared tunnel --url http://127.0.0.1:45869
+sudo systemctl status flask.service
+sudo systemctl status telegram-bot.service
 ```
 
-This gives a temporary public HTTPS URL.
+Restart services:
 
-## Domain Setup
+```bash
+sudo systemctl restart flask.service
+sudo systemctl restart telegram-bot.service
+```
 
-If you want a domain instead of raw server IP:
+View logs:
 
-1. Point your domain or subdomain A record to your server IP.
-2. Install Nginx.
-3. Reverse proxy the domain to Flask on port 45869.
-4. Install SSL certificate with Certbot.
+```bash
+sudo journalctl -u flask.service -n 100 --no-pager
+sudo journalctl -u telegram-bot.service -n 100 --no-pager
+```
 
-## Nginx Example
+## Domain Setup Later
 
-```nginx
+If you skip the domain during installation, you can add it later.
+
+### 1. Point DNS to your server
+
+Create an `A` record for your domain or subdomain and point it to your server IP.
+
+Example:
+
+- `news.example.com` → `185.28.119.231`
+
+### 2. Install Nginx and Certbot
+
+```bash
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
+
+### 3. Create Nginx config
+
+Replace `news.example.com` with your real domain and `45869` with your Flask port if different.
+
+```bash
+sudo tee /etc/nginx/sites-available/forexfactory-api > /dev/null <<'EOF'
 server {
+    listen 80;
+    listen [::]:80;
     server_name news.example.com;
 
     location / {
@@ -96,39 +171,81 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
+EOF
 ```
 
-## SSL Certificate with Certbot
-
-Install:
+Enable it:
 
 ```bash
-sudo apt update
-sudo apt install -y nginx certbot python3-certbot-nginx
+sudo ln -sf /etc/nginx/sites-available/forexfactory-api /etc/nginx/sites-enabled/forexfactory-api
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl restart nginx
 ```
 
-Then:
+### 4. Get SSL certificate
 
 ```bash
 sudo certbot --nginx -d news.example.com
 ```
 
-After that your API will be available at:
+After successful issuance, your API should be available at:
 
 ```text
 https://news.example.com/api/forex/today
 ```
 
-## Services
+### 5. Optional: update `.env`
 
-Systemd services created by installer:
-
-- `flask.service`
-- `telegram-bot.service` (only if enabled)
-
-Check status:
+If you want to store the public base URL in the app config:
 
 ```bash
-sudo systemctl status flask.service
-sudo systemctl status telegram-bot.service
+sudo nano /opt/forexfactory-api/.env
 ```
+
+Set:
+
+```env
+PUBLIC_BASE_URL=https://news.example.com
+```
+
+Then restart Flask:
+
+```bash
+sudo systemctl restart flask.service
+```
+
+## Troubleshooting
+
+### Flask is not starting
+
+Check logs:
+
+```bash
+sudo journalctl -u flask.service -n 100 --no-pager
+```
+
+### Telegram bot is running but news is not received
+
+Make sure Flask is active first, because the bot depends on the API.
+
+### Domain certificate was not issued
+
+Check these items:
+
+- Domain DNS is pointed to the correct server IP
+- Port 80 is open
+- Nginx is running
+- The domain is reachable from the public internet
+
+Then run Certbot again:
+
+```bash
+sudo certbot --nginx -d news.example.com
+```
+
+## Notes
+
+- Server IP access works over HTTP on port 80 through Nginx.
+- Domain access can work over HTTPS after SSL is issued.
+- If you do not need the Telegram bot, choose Flask only during install.
