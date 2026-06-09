@@ -18,9 +18,6 @@ read -p "Choose install mode [1/2]: " INSTALL_MODE
 read -p "Enter Flask port [default: 45869]: " FLASK_PORT
 FLASK_PORT=${FLASK_PORT:-45869}
 
-read -p "Do you need a temporary public URL now? [y/N]: " NEED_PUBLIC_URL
-NEED_PUBLIC_URL=${NEED_PUBLIC_URL:-N}
-
 read -p "Enter domain for HTTPS (press Enter to skip): " DOMAIN_NAME
 DOMAIN_NAME=${DOMAIN_NAME:-}
 
@@ -48,7 +45,7 @@ unset SSH_ASKPASS
 export GIT_TERMINAL_PROMPT=0
 
 apt update
-apt install -y git python3 python3-venv python3-pip curl
+apt install -y git python3 python3-venv python3-pip curl nginx
 
 if [ ! -d "$APP_DIR/.git" ]; then
   rm -rf "$APP_DIR"
@@ -147,13 +144,11 @@ systemctl enable telegram-bot.service
 systemctl restart telegram-bot.service
 fi
 
-if [ -n "$DOMAIN_NAME" ]; then
-  apt install -y nginx certbot python3-certbot-nginx
-
-  cat > /etc/nginx/sites-available/forexfactory-api <<EOF
+cat > /etc/nginx/sites-available/forexfactory-api <<EOF
 server {
     listen 80;
-    server_name $DOMAIN_NAME;
+    listen [::]:80;
+    server_name ${DOMAIN_NAME:-_};
 
     location / {
         proxy_pass http://127.0.0.1:$FLASK_PORT;
@@ -165,12 +160,14 @@ server {
 }
 EOF
 
-  ln -sf /etc/nginx/sites-available/forexfactory-api /etc/nginx/sites-enabled/forexfactory-api
-  rm -f /etc/nginx/sites-enabled/default
-  nginx -t
-  systemctl enable nginx
-  systemctl restart nginx
+ln -sf /etc/nginx/sites-available/forexfactory-api /etc/nginx/sites-enabled/forexfactory-api
+rm -f /etc/nginx/sites-enabled/default
+nginx -t
+systemctl enable nginx
+systemctl restart nginx
 
+if [ -n "$DOMAIN_NAME" ]; then
+  apt install -y certbot python3-certbot-nginx
   certbot --nginx --non-interactive --agree-tos -m "$CERTBOT_EMAIL" -d "$DOMAIN_NAME" --redirect || true
 fi
 
@@ -181,19 +178,12 @@ if [ "$RUN_BOT" = "true" ]; then
   BOT_STATUS=$(systemctl is-active telegram-bot.service || true)
 fi
 
-PUBLIC_URL="Not created"
-
-if [[ "$NEED_PUBLIC_URL" =~ ^[Yy]$ ]]; then
-  curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
-  dpkg -i /tmp/cloudflared.deb >/dev/null 2>&1 || apt-get install -f -y >/dev/null 2>&1
-
-  nohup cloudflared tunnel --url http://127.0.0.1:$FLASK_PORT > /tmp/cloudflared.log 2>&1 &
-  sleep 8
-
-  PUBLIC_URL=$(grep -o 'https://[-a-zA-Z0-9.]*trycloudflare.com' /tmp/cloudflared.log | head -n 1)
-  if [ -z "$PUBLIC_URL" ]; then
-    PUBLIC_URL="Failed to create"
-  fi
+SERVER_IP=$(curl -4 -s --max-time 10 ifconfig.me/ip || true)
+if [ -z "$SERVER_IP" ]; then
+  SERVER_IP=$(curl -4 -s --max-time 10 api.ipify.org || true)
+fi
+if [ -z "$SERVER_IP" ]; then
+  SERVER_IP="YOUR_SERVER_IP"
 fi
 
 echo
@@ -217,12 +207,13 @@ else
 fi
 
 echo -e "${GREEN}Local API:${NC} http://127.0.0.1:$FLASK_PORT/api/forex/today"
+echo -e "${GREEN}Public IP API:${NC} http://$SERVER_IP/api/forex/today"
 
 if [ -n "$DOMAIN_NAME" ]; then
-  echo -e "${GREEN}Domain URL:${NC} https://$DOMAIN_NAME/api/forex/today"
+  echo -e "${GREEN}Domain API:${NC} https://$DOMAIN_NAME/api/forex/today"
+else
+  echo -e "${YELLOW}Domain API:${NC} Not configured"
 fi
-
-echo -e "${GREEN}Temporary Public URL:${NC} $PUBLIC_URL"
 
 echo -e "${CYAN}_________________________________${NC}"
 echo -e "${CYAN}_________________________________${NC}"
