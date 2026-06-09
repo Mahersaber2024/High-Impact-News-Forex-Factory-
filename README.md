@@ -18,7 +18,7 @@ This project provides:
 ## Quick Install
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/Mahersaber2024/High-Impact-News-Forex-Factory-/main/install.sh)
 ```
 
 ## Install Options
