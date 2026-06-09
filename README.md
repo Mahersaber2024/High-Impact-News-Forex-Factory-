@@ -159,9 +159,12 @@ Replace `news.example.com` with your real domain and `45869` with your Flask por
 ```bash
 sudo tee /etc/nginx/sites-available/forexfactory-api > /dev/null <<'EOF'
 server {
-    listen 80;
-    listen [::]:80;
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name news.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/news.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/news.example.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:45869;
@@ -184,6 +187,8 @@ sudo systemctl restart nginx
 ```
 
 ### 4. Get SSL certificate
+
+If the certificate is not created yet, run:
 
 ```bash
 sudo certbot --nginx -d news.example.com
@@ -229,23 +234,25 @@ sudo journalctl -u flask.service -n 100 --no-pager
 
 Make sure Flask is active first, because the bot depends on the API.
 
-### Domain certificate was not issued
+### HTTPS does not open
 
 Check these items:
 
 - Domain DNS is pointed to the correct server IP
-- Port 80 is open
-- Nginx is running
-- The domain is reachable from the public internet
+- Port 443 is open
+- Nginx is listening on 443
+- No other service is using port 443
+- SSL certificate files exist in `/etc/letsencrypt/live/news.example.com/`
 
-Then run Certbot again:
+Then test again:
 
 ```bash
-sudo certbot --nginx -d news.example.com
+sudo ss -tlnp | grep ':443'
+curl -I https://news.example.com/api/forex/today
 ```
 
 ## Notes
 
-- Server IP access works over HTTP on port 80 through Nginx.
-- Domain access can work over HTTPS after SSL is issued.
+- This setup uses HTTPS only on port 443.
+- Do not paste Markdown links inside Nginx config. Use plain text only.
 - If you do not need the Telegram bot, choose Flask only during install.
