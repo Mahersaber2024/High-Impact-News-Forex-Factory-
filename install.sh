@@ -171,6 +171,10 @@ if [ -n "$DOMAIN_NAME" ]; then
   certbot --nginx --non-interactive --agree-tos -m "$CERTBOT_EMAIL" -d "$DOMAIN_NAME" --redirect || true
 fi
 
+# ============================================
+# بخش جدید: نمایش وضعیت و آموزش مدیریت سرویس
+# ============================================
+
 FLASK_STATUS=$(systemctl is-active flask.service || true)
 BOT_STATUS="disabled"
 
@@ -217,3 +221,33 @@ fi
 
 echo -e "${CYAN}_________________________________${NC}"
 echo -e "${CYAN}_________________________________${NC}"
+
+# ============================================
+# راهنمای مدیریت سرویس‌ها
+# ============================================
+echo -e "\n${CYAN}================== MANAGEMENT GUIDE ==================${NC}"
+echo -e "${YELLOW}To check service status:${NC}"
+echo "  systemctl status flask.service"
+if [ "$RUN_BOT" = "true" ]; then
+  echo "  systemctl status telegram-bot.service"
+fi
+
+echo -e "\n${YELLOW}To stop a service:${NC}"
+echo "  systemctl stop flask.service"
+if [ "$RUN_BOT" = "true" ]; then
+  echo "  systemctl stop telegram-bot.service"
+fi
+
+echo -e "\n${YELLOW}To restart a service:${NC}"
+echo "  systemctl restart flask.service"
+if [ "$RUN_BOT" = "true" ]; then
+  echo "  systemctl restart telegram-bot.service"
+fi
+
+echo -e "\n${YELLOW}To view service logs:${NC}"
+echo "  journalctl -u flask.service -f"
+if [ "$RUN_BOT" = "true" ]; then
+  echo "  journalctl -u telegram-bot.service -f"
+fi
+
+echo -e "\n${GREEN}All services are installed and configured.${NC}"
