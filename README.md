@@ -251,6 +251,36 @@ sudo ss -tlnp | grep ':443'
 curl -I https://news.example.com/api/forex/today
 ```
 
+## Uninstall
+
+To completely remove the application and all installed services:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Mahersaber2024/High-Impact-News-Forex-Factory-/main/uninstall.sh)
+```
+
+The uninstall script will:
+
+- Remove `flask.service`
+- Remove `telegram-bot.service` (if installed)
+- Remove Nginx configuration
+- Remove project files and virtual environment
+- Optionally remove Nginx, Certbot, Git and Python packages
+
+After removal, verify:
+
+```bash
+systemctl status flask.service
+systemctl status telegram-bot.service
+```
+
+Expected output:
+
+```text
+Unit flask.service could not be found.
+Unit telegram-bot.service could not be found.
+```
+
 ## Notes
 
 - This setup uses HTTPS only on port 443.
