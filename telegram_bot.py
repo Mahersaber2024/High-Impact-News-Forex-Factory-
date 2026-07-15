@@ -85,10 +85,10 @@ def get_user_language(chat_id: int) -> str:
         cur.execute("SELECT language FROM subscribers WHERE chat_id = ?", (chat_id,))
         row = cur.fetchone()
         conn.close()
-        return row[0] if row else 'fa'
+        return row[0] if row else 'en'
     except Exception as e:
         logger.error(f"Error in get_user_language for chat_id {chat_id}: {e}")
-        return 'fa'
+        return 'en'
 
 def set_user_language(chat_id: int, language: str):
     try:
@@ -116,7 +116,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 API_BASE = os.getenv("API_BASE_URL", "http://127.0.0.1:45869/api/forex")
 ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID", "0"))
 BASE_DIR   = pathlib.Path(__file__).resolve().parent
-DB_PATH    = BASE_DIR / "forexbot.db"
+SEND_RESTART_MSG = os.getenv("SEND_RESTART_MSG", "true").lower() == "true"
 
 # ───────────────  DB helpers  ─────────────
 def ensure_db():
@@ -129,7 +129,7 @@ def ensure_db():
                chat_id     INTEGER PRIMARY KEY,
                digest_time TEXT DEFAULT '07:00',
                joined_at   TEXT DEFAULT CURRENT_TIMESTAMP,
-               language    TEXT DEFAULT 'fa'
+               language    TEXT DEFAULT 'en'
         );"""
     )
 
@@ -151,7 +151,7 @@ def ensure_db():
 
     # اطمینان از وجود ستون language در subscribers
     try:
-        cur.execute("ALTER TABLE subscribers ADD COLUMN language TEXT DEFAULT 'fa'")
+        cur.execute("ALTER TABLE subscribers ADD COLUMN language TEXT DEFAULT 'en'")
     except sqlite3.OperationalError:
         pass
 
@@ -239,7 +239,7 @@ async def send_typing(ctx: ContextTypes.DEFAULT_TYPE, chat_id: int, delay: float
     await ctx.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     await asyncio.sleep(delay)
 
-def default_keyboard(language: str = 'fa') -> InlineKeyboardMarkup:
+def default_keyboard(language: str = 'en') -> InlineKeyboardMarkup:
     buttons = {
         'fa': [
             [InlineKeyboardButton("💱 انتخاب ارزها", callback_data="choose_currencies")],
@@ -306,7 +306,7 @@ def group_by_currency(events: list[dict]) -> dict[str, list[dict]]:
         grouped.setdefault(cur, []).append(ev)
     return grouped
 
-def format_message_clean(title: str, events: list[dict], language: str = 'fa') -> str:
+def format_message_clean(title: str, events: list[dict], language: str = 'en') -> str:
     if not events:
         return "😴 No hot news today." if language == 'en' else "😴 هیچ خبر داغی نیست."
 
@@ -440,8 +440,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("🇬🇧 English", callback_data="setlang_en")
             ]
         ])
+        # تغییر: ابتدا انگلیسی نمایش داده شود
         await update.message.reply_text(
-            "لطفاً زبان خود را انتخاب کنید:\nPlease select your language:",
+            "Please select your language:\nلطفاً زبان خود را انتخاب کنید:",
             reply_markup=keyboard
         )
         return
@@ -691,7 +692,7 @@ async def week(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(messages[language])
     await fetch_and_send(update, ctx, "weekly", "This Week's Economic News" if language == 'en' else "خبرهای اقتصادی این هفته")
     
-def build_currency_keyboard(selected: list[str], language: str = 'fa') -> InlineKeyboardMarkup:
+def build_currency_keyboard(selected: list[str], language: str = 'en') -> InlineKeyboardMarkup:
     all_currencies = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD", "CNY"]
     kb = []
     row = []
@@ -801,8 +802,14 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.message.edit_text(text, reply_markup=default_keyboard(language), parse_mode=ParseMode.HTML)
     await q.answer()
 
+# تغییر در تابع notify_restart:
 async def notify_restart(application):
     """ارسال پیام «بات دوباره آنلاین شد» به همه کاربران قبلی"""
+    # اگر تنظیمات غیرفعال باشد، هیچ کاری نکن
+    if not SEND_RESTART_MSG:
+        logger.info("Restart notification is disabled globally.")
+        return
+
     try:
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
@@ -835,7 +842,7 @@ async def notify_restart(application):
                     text=msg,
                     parse_mode=ParseMode.HTML
                 )
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(0.3)  # جلوگیری از محدودیت سرعت
             except Exception as e:
                 logger.warning(f"Could not send restart message to {chat_id}: {e}")
 
