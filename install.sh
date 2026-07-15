@@ -37,6 +37,23 @@ if [ "$INSTALL_MODE" = "2" ]; then
   echo
   read -p "Enter Admin chat ID [default: 0]: " ADMIN_CHAT_ID
   ADMIN_CHAT_ID=${ADMIN_CHAT_ID:-0}
+  
+  # ============================================
+  # سوال جدید: آیا پیام آنلاین شدن مجدد ارسال شود؟
+  # ============================================
+  echo
+  echo -e "${CYAN}Do you want to send restart notification to all users when bot restarts?${NC}"
+  echo "This will send a message to all users every time the bot service restarts."
+  read -p "Enable restart notification? [y/N]: " SEND_RESTART_MSG
+  SEND_RESTART_MSG=${SEND_RESTART_MSG:-n}
+  
+  if [[ $SEND_RESTART_MSG =~ ^[Yy]$ ]]; then
+    SEND_RESTART_MSG="true"
+    echo -e "${GREEN}✓ Restart notification will be sent to users.${NC}"
+  else
+    SEND_RESTART_MSG="false"
+    echo -e "${YELLOW}✗ Restart notification disabled.${NC}"
+  fi
 fi
 
 export DEBIAN_FRONTEND=noninteractive
@@ -89,6 +106,9 @@ if [ -n "$DOMAIN_NAME" ]; then
   PUBLIC_BASE_URL="https://$DOMAIN_NAME"
 fi
 
+# ============================================
+# اضافه کردن SEND_RESTART_MSG به فایل .env
+# ============================================
 cat > .env <<EOF
 FLASK_HOST=0.0.0.0
 FLASK_PORT=$FLASK_PORT
@@ -98,6 +118,7 @@ RUN_BOT=$RUN_BOT
 TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
 ADMIN_CHAT_ID=$ADMIN_CHAT_ID
 PUBLIC_BASE_URL=$PUBLIC_BASE_URL
+SEND_RESTART_MSG=$SEND_RESTART_MSG
 EOF
 
 cat > /etc/systemd/system/flask.service <<EOF
@@ -210,6 +231,15 @@ else
   echo -e "${YELLOW}Telegram Bot: DISABLED${NC}"
 fi
 
+# نمایش وضعیت ارسال پیام آنلاین شدن
+if [ "$RUN_BOT" = "true" ]; then
+  if [ "$SEND_RESTART_MSG" = "true" ]; then
+    echo -e "${GREEN}Restart Notifications: ENABLED${NC}"
+  else
+    echo -e "${YELLOW}Restart Notifications: DISABLED${NC}"
+  fi
+fi
+
 echo -e "${GREEN}Local API:${NC} http://127.0.0.1:$FLASK_PORT/api/forex/today"
 echo -e "${GREEN}Public IP API:${NC} http://$SERVER_IP/api/forex/today"
 
@@ -248,6 +278,19 @@ echo -e "\n${YELLOW}To view service logs:${NC}"
 echo "  journalctl -u flask.service -f"
 if [ "$RUN_BOT" = "true" ]; then
   echo "  journalctl -u telegram-bot.service -f"
+fi
+
+# ============================================
+# نمایش تنظیمات مربوط به پیام آنلاین شدن
+# ============================================
+if [ "$RUN_BOT" = "true" ]; then
+  echo -e "\n${CYAN}================== RESTART NOTIFICATION SETTINGS ==================${NC}"
+  echo -e "${YELLOW}To enable/disable restart notifications later:${NC}"
+  echo "  Edit $APP_DIR/.env file and change:"
+  echo "  SEND_RESTART_MSG=true  # to enable"
+  echo "  SEND_RESTART_MSG=false # to disable"
+  echo -e "${YELLOW}Then restart the bot service:${NC}"
+  echo "  systemctl restart telegram-bot.service"
 fi
 
 echo -e "\n${GREEN}All services are installed and configured.${NC}"
