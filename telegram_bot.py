@@ -4,6 +4,7 @@ import datetime as dt
 import requests
 import sqlite3
 import pathlib
+
 from datetime import datetime
 import pytz
 from collections import defaultdict
@@ -116,6 +117,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 API_BASE = os.getenv("API_BASE_URL", "http://127.0.0.1:45869/api/forex")
 ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID", "0"))
 BASE_DIR   = pathlib.Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "forexbot.db"
 SEND_RESTART_MSG = os.getenv("SEND_RESTART_MSG", "true").lower() == "true"
 
 # ───────────────  DB helpers  ─────────────
